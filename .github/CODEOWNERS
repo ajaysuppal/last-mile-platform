@@ -1,0 +1,7 @@
+# Default owner. When the team grows, add per-area owners below (last match wins).
+*                       @ajaysuppal
+
+# /src/lastmile/planning/       @routing-owner
+# /src/lastmile/execution/      @driver-owner
+# /src/lastmile/control_tower/  @control-tower-owner
+# /src/lastmile_sim/            @simulator-owner
