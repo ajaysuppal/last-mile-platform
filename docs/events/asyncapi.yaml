@@ -1,0 +1,302 @@
+asyncapi: 3.0.0
+info:
+  title: Last-Mile Platform events
+  version: 1.0.0
+  description: |
+    Immutable, versioned events written to the `events` table in the same transaction as the state change
+    (ADR-0004). Consumers read by sequence number and store their offset. Merchant-facing events are also delivered
+    as signed webhooks (ADR-0009) with the envelope as `data`.
+
+    Contract rules: additive changes only within a version; consumers must ignore unknown fields and unknown
+    event types.
+
+channels:
+  events:
+    address: events
+    description: The platform event log, ordered by `seq`.
+    messages:
+      orderCreated: { $ref: '#/components/messages/orderCreated' }
+      orderCancelled: { $ref: '#/components/messages/orderCancelled' }
+      routePublished: { $ref: '#/components/messages/routePublished' }
+      driverAssigned: { $ref: '#/components/messages/driverAssigned' }
+      routeAccepted: { $ref: '#/components/messages/routeAccepted' }
+      routeCancelled: { $ref: '#/components/messages/routeCancelled' }
+      driverArrivedPickup: { $ref: '#/components/messages/driverArrivedPickup' }
+      packageScanned: { $ref: '#/components/messages/packageScanned' }
+      stopArrived: { $ref: '#/components/messages/stopArrived' }
+      podCaptured: { $ref: '#/components/messages/podCaptured' }
+      deliveryCompleted: { $ref: '#/components/messages/deliveryCompleted' }
+      deliveryFailed: { $ref: '#/components/messages/deliveryFailed' }
+      packageTransferred: { $ref: '#/components/messages/packageTransferred' }
+      routeCompleted: { $ref: '#/components/messages/routeCompleted' }
+      returnCreated: { $ref: '#/components/messages/returnCreated' }
+      exceptionRaised: { $ref: '#/components/messages/exceptionRaised' }
+      exceptionResolved: { $ref: '#/components/messages/exceptionResolved' }
+      rescueProposed: { $ref: '#/components/messages/rescueProposed' }
+      rescueDispatched: { $ref: '#/components/messages/rescueDispatched' }
+      rescueCancelled: { $ref: '#/components/messages/rescueCancelled' }
+      driverIncidentReported: { $ref: '#/components/messages/driverIncidentReported' }
+      shiftStarted: { $ref: '#/components/messages/shiftStarted' }
+      shiftEnded: { $ref: '#/components/messages/shiftEnded' }
+      driverLocation: { $ref: '#/components/messages/driverLocation' }
+
+operations:
+  consumeEvents:
+    action: receive
+    channel: { $ref: '#/channels/events' }
+    summary: Consumers (planner, webhooks, control tower, analytics) read the log in order.
+
+components:
+  schemas:
+    Envelope:
+      type: object
+      required: [event_id, event_type, version, occurred_at, recorded_at, source, metadata]
+      properties:
+        seq: { type: integer, description: Position in the log (present when read from the platform) }
+        event_id: { type: string, format: uuid, description: UUIDv7; producer-generated idempotency key }
+        event_type: { type: string, examples: [delivery.completed] }
+        version: { type: integer, minimum: 1 }
+        occurred_at: { type: string, format: date-time, description: Device or simulated time }
+        recorded_at: { type: string, format: date-time, description: Server time when stored }
+        source:
+          type: string
+          enum: [merchant-api, admin-api, planner, driver-app, control-tower, platform, simulator]
+        order_id: { type: [string, 'null'], format: uuid }
+        package_id: { type: [string, 'null'], format: uuid }
+        route_id: { type: [string, 'null'], format: uuid }
+        stop_id: { type: [string, 'null'], format: uuid }
+        driver_id: { type: [string, 'null'], format: uuid }
+        vehicle_id: { type: [string, 'null'], format: uuid }
+        merchant_id: { type: [string, 'null'], format: uuid }
+        facility_id: { type: [string, 'null'], format: uuid }
+        latitude: { type: [number, 'null'], minimum: -90, maximum: 90 }
+        longitude: { type: [number, 'null'], minimum: -180, maximum: 180 }
+        metadata: { type: object, additionalProperties: true }
+
+  messages:
+    orderCreated:
+      name: order.created
+      summary: A merchant order was accepted. Location = delivery point.
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - properties:
+              metadata:
+                properties:
+                  merchant_order_ref: { type: string }
+                  tracking_code: { type: string }
+                  sla_profile: { type: string }
+                  promised_by: { type: string, format: date-time }
+                  window_start: { type: [string, 'null'], format: date-time }
+                  window_end: { type: [string, 'null'], format: date-time }
+                  package_count: { type: integer }
+                  total_weight_kg: { type: number }
+                  total_volume_l: { type: number }
+    orderCancelled:
+      name: order.cancelled
+      summary: Merchant cancelled before pickup.
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - properties:
+              metadata:
+                properties:
+                  reason: { type: string }
+                  previous_status: { type: string }
+    routePublished:
+      name: route.published
+      summary: The planner (or a rescue) created a route.
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - properties:
+              metadata:
+                properties:
+                  route_code: { type: string }
+                  kind: { type: string, enum: [standard, rescue] }
+                  stop_count: { type: integer }
+                  planned_start: { type: string, format: date-time }
+                  planned_end: { type: string, format: date-time }
+                  planned_distance_km: { type: number }
+    driverAssigned:
+      name: driver.assigned
+      summary: A route was offered to an eligible driver + vehicle.
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - properties:
+              metadata:
+                properties:
+                  accept_by: { type: string, format: date-time }
+    routeAccepted:
+      name: route.accepted
+      summary: Driver accepted the route in the app.
+      payload: { $ref: '#/components/schemas/Envelope' }
+    routeCancelled:
+      name: route.cancelled
+      summary: Route withdrawn (no-show, reassignment); its orders return to planning.
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - properties:
+              metadata:
+                properties:
+                  reason: { type: string }
+    driverArrivedPickup:
+      name: driver.arrived_pickup
+      summary: Driver reached the pickup point (facility, or meet point for a rescue).
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - properties:
+              metadata:
+                properties:
+                  distance_m: { type: number }
+                  geofence_ok: { type: boolean }
+    packageScanned:
+      name: package.scanned
+      summary: A package barcode was scanned (pickup custody or at the door).
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - properties:
+              metadata:
+                properties:
+                  scan_type: { type: string, enum: [pickup, delivery] }
+                  barcode: { type: string }
+    stopArrived:
+      name: stop.arrived
+      summary: Driver arrived at a delivery stop.
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - properties:
+              metadata:
+                properties:
+                  distance_m: { type: number }
+                  geofence_ok: { type: boolean }
+    podCaptured:
+      name: pod.captured
+      summary: Proof of delivery captured on the device (possibly offline).
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - properties:
+              metadata:
+                properties:
+                  pod_id: { type: string, format: uuid }
+                  pod_type: { type: string, enum: [photo, signature, code] }
+    deliveryCompleted:
+      name: delivery.completed
+      summary: Package delivered. Merchant-facing.
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - properties:
+              metadata:
+                properties:
+                  attempt_no: { type: integer }
+                  geofence_ok: { type: boolean }
+                  on_time: { type: boolean }
+    deliveryFailed:
+      name: delivery.failed
+      summary: Delivery attempt failed. Merchant-facing.
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - properties:
+              metadata:
+                properties:
+                  reason:
+                    type: string
+                    enum: [customer_unavailable, address_not_found, refused, damaged, access_issue, other]
+                  attempt_no: { type: integer }
+    packageTransferred:
+      name: package.transferred
+      summary: Custody moved to another route (rescue or manual transfer).
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - properties:
+              metadata:
+                properties:
+                  from_route_id: { type: string, format: uuid }
+                  to_route_id: { type: string, format: uuid }
+                  rescue_id: { type: [string, 'null'], format: uuid }
+    routeCompleted:
+      name: route.completed
+      summary: Driver finished the route back at the facility.
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - properties:
+              metadata:
+                properties:
+                  delivered: { type: integer }
+                  failed: { type: integer }
+    returnCreated:
+      name: return.created
+      summary: Undeliverable order returned to the merchant after the last attempt. Merchant-facing.
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - properties:
+              metadata:
+                properties:
+                  attempts: { type: integer }
+                  last_reason: { type: string }
+    exceptionRaised:
+      name: exception.raised
+      summary: The control tower opened an exception.
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - properties:
+              metadata:
+                properties:
+                  exception_id: { type: string, format: uuid }
+                  type:
+                    type: string
+                    enum: [driver_no_show, route_at_risk, route_late, vehicle_breakdown, stale_heartbeat,
+                           delivery_failed, geofence_violation, order_unassigned_sla_risk, rescue_suppressed]
+                  severity: { type: string, enum: [info, warning, critical] }
+                  message: { type: string }
+    exceptionResolved:
+      name: exception.resolved
+      summary: An exception was resolved (by a person or automatically).
+      payload: { $ref: '#/components/schemas/Envelope' }
+    rescueProposed:
+      name: rescue.proposed
+      summary: A rescue (transfer of remaining stops) was proposed; awaits approval.
+      payload: { $ref: '#/components/schemas/Envelope' }
+    rescueDispatched:
+      name: rescue.dispatched
+      summary: Approved rescue was dispatched to a rescue route.
+      payload: { $ref: '#/components/schemas/Envelope' }
+    rescueCancelled:
+      name: rescue.cancelled
+      summary: Rescue cancelled before dispatch.
+      payload: { $ref: '#/components/schemas/Envelope' }
+    driverIncidentReported:
+      name: driver.incident_reported
+      summary: Driver reported a breakdown or other incident.
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - properties:
+              metadata:
+                properties:
+                  kind: { type: string, enum: [breakdown, accident, other] }
+                  note: { type: string }
+    shiftStarted:
+      name: shift.started
+      summary: Driver started a shift with an eligible vehicle.
+      payload: { $ref: '#/components/schemas/Envelope' }
+    shiftEnded:
+      name: shift.ended
+      summary: Driver ended the shift.
+      payload: { $ref: '#/components/schemas/Envelope' }
+    driverLocation:
+      name: driver.location
+      summary: Sampled GPS position (live positions stream over SSE; only samples are logged).
+      payload: { $ref: '#/components/schemas/Envelope' }
