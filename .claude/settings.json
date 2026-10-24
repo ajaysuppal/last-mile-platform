@@ -1,0 +1,54 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(make lint)",
+      "Bash(make test)",
+      "Bash(make fmt)",
+      "Bash(uv run pytest:*)",
+      "Bash(uv run ruff:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git switch:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(gh issue view:*)",
+      "Bash(gh issue list:*)",
+      "Bash(gh pr view:*)",
+      "Bash(gh pr list:*)",
+      "Bash(gh pr checks:*)",
+      "Bash(gh pr create:*)"
+    ],
+    "deny": [
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(git reset --hard:*)",
+      "Read(./.env)",
+      "Read(./.env.local)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard_bash.py\""
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|MultiEdit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/ruff_on_edit.py\""
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,24 @@
+name: Architecture decision
+description: Propose a decision to record in docs/adr
+title: "ADR: <decision>"
+labels: ["type:adr"]
+body:
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: What forces are at play?
+    validations:
+      required: true
+  - type: textarea
+    id: options
+    attributes:
+      label: Options considered
+    validations:
+      required: true
+  - type: textarea
+    id: decision
+    attributes:
+      label: Proposed decision and consequences
+    validations:
+      required: true

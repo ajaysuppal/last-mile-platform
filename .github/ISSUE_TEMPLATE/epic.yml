@@ -1,0 +1,22 @@
+name: Epic
+description: A larger outcome broken into user stories (sub-issues)
+title: "<epic outcome>"
+labels: ["type:epic"]
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: What changes for users when this epic is done?
+    validations:
+      required: true
+  - type: textarea
+    id: metric
+    attributes:
+      label: Success metric
+      placeholder: e.g. 95% of simulated orders delivered on time
+  - type: textarea
+    id: stories
+    attributes:
+      label: Stories
+      description: Link sub-issues here (or add them as GitHub sub-issues).

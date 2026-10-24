@@ -1,0 +1,48 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --locked --all-groups
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --locked --all-groups
+      - run: uv run pytest -q
+
+  # Single required status check for the branch ruleset.
+  ci:
+    if: always()
+    needs: [lint, test]
+    runs-on: ubuntu-latest
+    steps:
+      - name: All jobs passed
+        run: |
+          echo '${{ toJSON(needs) }}'
+          if [ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" = "true" ]; then
+            exit 1
+          fi

@@ -1,0 +1,39 @@
+name: User story
+description: A user-facing slice of value with testable acceptance criteria
+title: "<short outcome-focused title>"
+labels: ["type:story"]
+body:
+  - type: markdown
+    attributes:
+      value: "Keep it small enough to ship in one PR (≈ ≤ 400 changed lines)."
+  - type: textarea
+    id: story
+    attributes:
+      label: User story
+      description: As a … I want … so that …
+      placeholder: As a merchant I want to cancel an order before pickup so that I don't pay for unwanted deliveries.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria (Given / When / Then)
+      placeholder: |
+        - [ ] Given …, when …, then …
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options: [core, merchant-api, webhooks, carrier, planning, driver, control-tower, analytics, sim, data, semantic, assistant, platform, docs]
+    validations:
+      required: true
+  - type: checkboxes
+    id: impact
+    attributes:
+      label: Impact
+      options:
+        - label: Changes an API or event contract
+        - label: Needs a database migration
+        - label: Needs an ADR
